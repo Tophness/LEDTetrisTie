@@ -1,29 +1,29 @@
 
 /*
 * LEDTetrisNeckTie.c
-*
-* Created: 6/21/2013 
-*  Author: Bill Porter
-*    www.billporter.info
-*
-*   AI player code by: Mofidul Jamal
-*
-*    Code to run a wicked cool LED Tetris playing neck tie. Details:              
-*         http://www.billporter.info/2013/06/21/led-tetris-tie/
-*
-*This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License.
-*To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/ or
-*send a letter to Creative Commons, 444 Castro Street, Suite 900, Mountain View, California, 94041, USA.
-*
-*/ 
+ *
+ * Created: 6/21/2013 
+ *  Author: Bill Porter
+ *    www.billporter.info
+ *
+ *   AI player code by: Mofidul Jamal
+ *
+ *    Code to run a wicked cool LED Tetris playing neck tie. Details:              
+ *         http://www.billporter.info/2013/06/21/led-tetris-tie/
+ *
+ *This work is licensed under the Creative Commons Attribution-ShareAlike 3.0 Unported License.
+ *To view a copy of this license, visit http://creativecommons.org/licenses/by-sa/3.0/ or
+ *send a letter to Creative Commons, 444 Castro Street, Suite 900, Mountain View, California, 94041, USA.
+ *
+ */
 
 
 
 /* Notes
-Analog 2 is pin 2
-LED is on pin 0
-RGB LEDS data is on pin 1
-*/
+ Analog 2 is pin 2
+ LED is on pin 0
+ RGB LEDS data is on pin 1
+ */
 
 
 
@@ -71,37 +71,43 @@ static PROGMEM prog_uint16_t bricks[ brick_count ][4] = {
     0b0000000011110000,
     0b0100010001000100,
     0b0000000011110000
-  },
+  }
+  ,
   {
     0b0000010011100000,      //T  purple
     0b0000010001100100,
     0b0000000011100100,
     0b0000010011000100
-  },
+  }
+  ,
   {
     0b0000011001100000,      //2x2 yellow
     0b0000011001100000,
     0b0000011001100000,
     0b0000011001100000
-  },
+  }
+  ,
   {
     0b0000000011100010,      //L orange
     0b0000010001001100,
     0b0000100011100000,
     0b0000011001000100
-  },
+  }
+  ,
   {
     0b0000000011101000,      //inverse L blue
     0b0000110001000100,
     0b0000001011100000,
     0b0000010001000110
-  },
+  }
+  ,
   {
     0b0000100011000100,      //S green
     0b0000011011000000,
     0b0000100011000100,
     0b0000011011000000
-  },
+  }
+  ,
   {
     0b0000010011001000,      //Z red
     0b0000110001100000,
@@ -120,21 +126,21 @@ static PROGMEM prog_uint8_t brick_colors[brick_count]={
   0b00000011, //blue
   0b00011100, //green
   0b11100000 //red
-  
+
 };
 
 
 /*const unsigned short level_ticks_timeout[ max_level ]  = {
-32,
-28,
-24,
-20,
-17,
-13,
-10,
-8,
-5
-};*/
+ 32,
+ 28,
+ 24,
+ 20,
+ 17,
+ 13,
+ 10,
+ 8,
+ 5
+ };*/
 //const unsigned int score_per_level          = 10; //per brick in lv 1+
 //const unsigned int score_per_line          = 300;
 
@@ -143,12 +149,24 @@ byte wall[FIELD_WIDTH][FIELD_HEIGHT];
 //The 'wall' is the 2D array that holds all bricks that have already 'fallen' into place
 
 bool aiCalculatedAlready = false;
+bool humanMode = false;
+const int selectPin = 4;
+const int joystick_xPin = A0;
+const int joystick_yPin = A5;
+int joystick_x = 0;
+int joystick_y = 0;
+int select = 0;
+int oldX = 0;
+int oldY = 0;
+int oldSelect = 0;
+int joyNotUsedCount = 0;
 
 struct TAiMoveInfo{
   byte rotation;
   int positionX, positionY;
   int weight;
-} aiCurrentMove;
+} 
+aiCurrentMove;
 
 struct TBrick{
   byte type; //This is the current brick shape. 
@@ -157,7 +175,18 @@ struct TBrick{
   int positionX, positionY; //active brick position
   byte pattern[4][4]; //2D array of active brick shape, used for drawing and collosion detection
 
-} currentBrick;
+} 
+currentBrick;
+
+struct TBrick{
+  byte type; //This is the current brick shape. 
+  byte rotation; //active brick rotation
+  byte color; //active brick color
+  int positionX, positionY; //active brick position
+  byte pattern[4][4]; //2D array of active brick shape, used for drawing and collosion detection
+
+} 
+huCurrentMove;
 
 
 //unsigned short  level        = 0;
@@ -167,10 +196,9 @@ struct TBrick{
 // Define the RGB pixel array and controller functions, 
 Adafruit_NeoPixel strip = Adafruit_NeoPixel(80, LEDDATAPIN, NEO_GRB + NEO_KHZ800);
 
-
-
 void setup(){
-
+  pinMode(selectPin, INPUT);
+  digitalWrite(selectPin, HIGH);
   pinMode(LEDDATAPIN, OUTPUT); //LED on Model B
   pinMode(POWEROFFPIN, OUTPUT); 
   pinMode(13, OUTPUT); 
@@ -180,26 +208,49 @@ void setup(){
 }
 
 void loop(){
-
+  checkJoystick();
   checkBattery();
 
   //screenTest();
   play();
-  
+
+}
+
+void checkJoysick(){
+  joystick_x = map(analogRead(joystick_xPin), 0, 1023, 1, 20);
+  joystick_y = map(analogRead(joystick_yPin), 0, 1023, 1, 20);
+  select = !digitalRead(selectPin);
+  if((oldX != joystick_x) || (oldY != joystick_y) || (oldSelect != select)){
+    if(humanMode == false && select){
+      humanMode = true;
+    }
+    performHuman();
+  }
+  else{
+    joyNotUsedCount += 1;
+    if(joyNotUsedCount > 30000){
+      joyNotUsedCount = 0;
+      humanMode = false;
+    }
+  }
+  oldX = joystick_x;
+  oldY = joystick_y;
+  oldSelect = select;
+  delay(10);
 }
 
 //checks battery voltage, toggles external power latch if battery is low
 void checkBattery(){
 
   int voltage=0;
-  
+
   //read ADC pin, convert to voltage measurement
   voltage = map(analogRead(BATTERYVOLTAGEPIN),0,1024,0,5000);
-  
+
   //low battery voltage, turn off power to tie
   if(voltage<2800)
-    digitalWrite(4, HIGH);
-	
+    digitalWrite(POWEROFFPIN, HIGH);
+
 }
 
 //tests pixels
@@ -221,73 +272,127 @@ void play(){
   //see how high the wall goes, end game early to save battery power
   if(getHighestColumn() > 9)
     newGame();
-  
-  
-if(currentBrick.positionY < 2){
-    moveDown();
-  //pulse onbaord LED and delay game
-  digitalWrite(13, HIGH);   
-  delay(tick_delay);               
-  digitalWrite(13, LOW);    
-  delay(tick_delay);  
-}
-else{
-  //this flag gets set after calculating the AI move
-  //and reset after we get the nextbrick in the nextBrick call
-  if(aiCalculatedAlready == false)
-  {
-    performAI();
-  }
-  else
-  {
-    byte command = getCommand();
-      if( command == UP )
-  {
-    if( checkRotate( 1 ) == true )
-    {
-      rotate( 1 );
-      moveDown();
-    }
-    else
-    moveDown();
-  }
-  else if( command == LEFT )
-  {
-    if( checkShift( -1, 0 ) == true )
-    {
-      shift( -1, 0 );
-      moveDown();
-    }
-    else
-    moveDown();
-  }
-  else if( command == RIGHT )
-  {
-    if( checkShift( 1, 0 ) == true )
-    {
-      shift( 1, 0 );
-      moveDown();
-    }
-    else
-    moveDown();
-  }
 
-  if(command == DOWN )
-  {
+
+  if(currentBrick.positionY < 2){
     moveDown();
-    
-  }
     //pulse onbaord LED and delay game
-  digitalWrite(13, HIGH);   
-  delay(tick_delay);               
-  digitalWrite(13, LOW);    
-  delay(tick_delay);  
-  
+    digitalWrite(13, HIGH);   
+    delay(tick_delay);               
+    digitalWrite(13, LOW);    
+    delay(tick_delay);  
   }
+  else{
+    //this flag gets set after calculating the AI move
+    //and reset after we get the nextbrick in the nextBrick call
+    if(aiCalculatedAlready == false)
+    {
+     if(humanMode == false){
+      performAI();
+     }
+    }
+    else
+    {
+      byte command;
+     if(humanMode){
+       command = getCommandHuman();
+     }
+     else{
+       command = getCommand();
+     }
+      if( command == UP )
+      {
+        if( checkRotate( 1 ) == true )
+        {
+          rotate( 1 );
+          moveDown();
+        }
+        else
+          moveDown();
+      }
+      else if( command == LEFT )
+      {
+        if( checkShift( -1, 0 ) == true )
+        {
+          shift( -1, 0 );
+          moveDown();
+        }
+        else
+          moveDown();
+      }
+      else if( command == RIGHT )
+      {
+        if( checkShift( 1, 0 ) == true )
+        {
+          shift( 1, 0 );
+          moveDown();
+        }
+        else
+          moveDown();
+      }
+
+      if(command == DOWN )
+      {
+        moveDown();
+
+      }
+      //pulse onbaord LED and delay game
+      digitalWrite(13, HIGH);   
+      delay(tick_delay);               
+      digitalWrite(13, LOW);    
+      delay(tick_delay);  
+
+    }
   }
   drawGame();
 
-    
+
+}
+
+//performs AI player calculations. 
+void performHuman(){
+  struct TBrick initialBrick;
+  //save position of the brick in its raw state
+  memcpy((void*)&initialBrick, (void*)&currentBrick, sizeof(TBrick));
+  memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
+
+    if(joystick_yPin < 650){
+      if(checkRotate(1) == true){
+        rotate(0);
+        memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
+      }
+    }
+    if(joystick_yPin > 650){
+      if(checkRotate(1) == true){
+        rotate(1);
+        //save the rotated brick
+        memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
+      }
+    }
+    if(joystick_xPin < 650){
+      if(checkShift(-1,0) == true){
+        shift(-1, 0);
+        memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
+      }
+    }
+    else if(joystick_xPin > 650){
+      if(checkShift(1,0) == true){
+        shift(1, 0);
+        memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
+      }
+    }
+    if(select){
+      while(checkGround() == false && select)
+      {
+        shift(0,1);
+      }
+    }
+
+  //restore original brick that we started with
+  memcpy((void*)&currentBrick, (void*)&initialBrick, sizeof(TBrick));
+  
+  updateBrickArray();
+  aiCalculatedAlready = true;
 }
 
 //performs AI player calculations. 
@@ -348,10 +453,10 @@ void performAI(){
     //reload rotated start position
     memcpy((void*)&currentBrick, (void*)&aiRotatedBrick, sizeof(TBrick));
   }
-  
+
   //at this point we have calculated all the weights of every possible position and rotation of the brick
 
-  //find move with lowest weight 
+    //find move with lowest weight 
   int lowestWeight = aiMoves[0].weight;
   int lowestWeightIndex = 0;
   for(int i = 1; i < aiMoveCounter; i++)
@@ -390,7 +495,7 @@ int aiCalculateWeight(){
   }
   else
   {
-      weights = (HIGH_COLUMN_WEIGHT * highestColumn) + (HOLE_WEIGHT * holeCount);
+    weights = (HIGH_COLUMN_WEIGHT * highestColumn) + (HOLE_WEIGHT * holeCount);
   }
   removeFromWall(); //undo the wall addition when done
   return weights;
@@ -447,7 +552,7 @@ bool getFullLinePossible()
       if( wall[k][i] != 0)  
         lineCheck++;
     }
-    
+
     if(lineCheck == FIELD_WIDTH)
     {
       return true;
@@ -464,6 +569,17 @@ byte getCommand(){
   if(currentBrick.positionX < aiCurrentMove.positionX)
     return RIGHT;
   if(currentBrick.positionX == aiCurrentMove.positionX)
+    return DOWN;
+}
+
+byte getCommandHuman(){
+  if(currentBrick.rotation != huCurrentMove.rotation)
+    return UP;
+  if(currentBrick.positionX > huCurrentMove.positionX)
+    return LEFT;
+  if(currentBrick.positionX < huCurrentMove.positionX)
+    return RIGHT;
+  if(currentBrick.positionX == huCurrentMove.positionX)
     return DOWN;
 }
 
@@ -627,7 +743,7 @@ void addToWall()
     {
       if(currentBrick.pattern[i][k] != 0){
         wall[currentBrick.positionX + i][currentBrick.positionY + k] = currentBrick.color;
-        
+
       }
     }
   }
@@ -641,7 +757,7 @@ void removeFromWall(){
     {
       if(currentBrick.pattern[i][k] != 0){
         wall[currentBrick.positionX + i][currentBrick.positionY + k] = 0;
-        
+
       }
     }
   }
@@ -657,9 +773,9 @@ void updateBrickArray()
     for( byte k = 0; k < 4; k++ )
     {
       if(bitRead(data, 4*i+3-k))
-      currentBrick.pattern[k][i] = currentBrick.color; 
+        currentBrick.pattern[k][i] = currentBrick.color; 
       else
-      currentBrick.pattern[k][i] = 0;
+        currentBrick.pattern[k][i] = 0;
     }
   }
 }
@@ -687,7 +803,7 @@ bool clearLine()
     for( byte k = 0; k < FIELD_WIDTH; k++ )
     {
       if( wall[k][i] != 0)  
-      line_check++;
+        line_check++;
     }
 
     if( line_check == FIELD_WIDTH )
@@ -740,10 +856,10 @@ void flashLine( int line ){
     for(byte k = 0; k < FIELD_WIDTH; k++ )
     {  
       if(state)
-      wall[k][line] = 0b11111111;
+        wall[k][line] = 0b11111111;
       else
-      wall[k][line] = 0;
-      
+        wall[k][line] = 0;
+
     }
     state = !state;
     drawWall();
@@ -761,7 +877,7 @@ void drawWall(){
     {
       draw(wall[j][k],FULL,j,k);
     }
-    
+
   }
 
 }
@@ -795,19 +911,19 @@ void drawGame()
 // Assumes a Down->UP->RIGHT->Up->Down->etc (Shorest wire path) LED strips display.
 //new brightness value lets you dim LEDs w/o changing color. 
 void draw(byte color, signed int brightness, byte x, byte y){
-  
+
   unsigned short address=0;
   byte r,g,b;
-  
+
   //flip y for new tie layout. remove if your strips go up to down
   y = (FIELD_HEIGHT-1) - y;
-  
+
   //calculate address
   if(x%2==0) //even row
-  address=FIELD_HEIGHT*x+y;
+    address=FIELD_HEIGHT*x+y;
   else //odd row
   address=((FIELD_HEIGHT*(x+1))-1)-y;
-  
+
   if(color==0 || brightness < 0){
     strip.setPixelColor(address, 0);
   }
@@ -816,35 +932,35 @@ void draw(byte color, signed int brightness, byte x, byte y){
     b=color&0b00000011;
     g=(color&0b00011100)>>2;
     r=(color&0b11100000)>>5;
-    
+
     //make sure brightness value is correct
     brightness=constrain(brightness,0,FULL);
-    
+
     strip.setPixelColor(address, map(r,0,7,0,brightness), map(g,0,7,0,brightness), map(b,0,3,0,brightness));
 
   }
-  
+
 }
 
 //obvious function
 void gameOver()
 {
   /*  
-Serial.println( "Game Over." );
-
-Serial.print( "Level:\t");
-Serial.println( level );
-
-Serial.print( "Lines:\t" );
-Serial.println( score_lines );
-
-Serial.print( "Score:\t");
-Serial.println( score );
-Serial.println();
-
-Serial.println("Insert coin to continue");
-waitForInput();
-*/
+   Serial.println( "Game Over." );
+   
+   Serial.print( "Level:\t");
+   Serial.println( level );
+   
+   Serial.print( "Lines:\t" );
+   Serial.println( score_lines );
+   
+   Serial.print( "Score:\t");
+   Serial.println( score );
+   Serial.println();
+   
+   Serial.println("Insert coin to continue");
+   waitForInput();
+   */
   newGame();
 }
 
@@ -866,6 +982,6 @@ void newGame()
 void updateDisplay(){
 
   strip.show();
-  
-  
+
+
 }
