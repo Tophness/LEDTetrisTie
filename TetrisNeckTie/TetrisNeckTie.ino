@@ -354,7 +354,6 @@ void performHuman(){
   struct TBrick initialBrick;
   //save position of the brick in its raw state
   memcpy((void*)&initialBrick, (void*)&currentBrick, sizeof(TBrick));
-  memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
 
     if(joystick_yPin < 650){
       if(checkRotate(1) == true){
@@ -365,7 +364,6 @@ void performHuman(){
     if(joystick_yPin > 650){
       if(checkRotate(1) == true){
         rotate(1);
-        //save the rotated brick
         memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
       }
     }
@@ -385,6 +383,7 @@ void performHuman(){
       while(checkGround() == false && select)
       {
         shift(0,1);
+        memcpy((void*)&huCurrentMove, (void*)&currentBrick, sizeof(TBrick));
       }
     }
 
@@ -985,3 +984,6 @@ void updateDisplay(){
 
 
 }
+
+
+
