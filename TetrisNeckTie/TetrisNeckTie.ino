@@ -32,9 +32,9 @@
 #include <avr/pgmspace.h>
 
 //Constants on how it's physically wired
-#define LEDDATAPIN 2
-#define POWEROFFPIN 4
-#define BATTERYVOLTAGEPIN 0
+#define LEDDATAPIN 4
+#define POWEROFFPIN 2
+#define BATTERYVOLTAGEPIN 1
 
 //constants and initialization
 #define UP  0
@@ -150,9 +150,9 @@ byte wall[FIELD_WIDTH][FIELD_HEIGHT];
 
 bool aiCalculatedAlready = false;
 bool humanMode = false;
-const int selectPin = 4;
-const int joystick_xPin = A0;
-const int joystick_yPin = A5;
+const int selectPin = 7;
+const int joystick_xPin = A6;
+const int joystick_yPin = A8;
 int joystick_x = 0;
 int joystick_y = 0;
 int select = 0;
@@ -178,16 +178,7 @@ struct TBrick{
 } 
 currentBrick;
 
-struct TBrick{
-  byte type; //This is the current brick shape. 
-  byte rotation; //active brick rotation
-  byte color; //active brick color
-  int positionX, positionY; //active brick position
-  byte pattern[4][4]; //2D array of active brick shape, used for drawing and collosion detection
-
-} 
-huCurrentMove;
-
+struct TBrick huCurrentMove;
 
 //unsigned short  level        = 0;
 //unsigned long  score        = 0;
@@ -208,7 +199,7 @@ void setup(){
 }
 
 void loop(){
-  checkJoystick();
+  checkJoyStick();
   checkBattery();
 
   //screenTest();
@@ -216,7 +207,7 @@ void loop(){
 
 }
 
-void checkJoysick(){
+void checkJoyStick(){
   joystick_x = map(analogRead(joystick_xPin), 0, 1023, 1, 20);
   joystick_y = map(analogRead(joystick_yPin), 0, 1023, 1, 20);
   select = !digitalRead(selectPin);
